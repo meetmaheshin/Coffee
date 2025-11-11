@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-cream-50 via-coffee-50 to-cream-100;
+    @apply text-coffee-900 font-sans min-h-screen;
+  }
+  
+  * {
+    @apply antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gradient-to-r from-coffee-600 to-coffee-700 text-white px-6 py-3 rounded-xl 
+           font-semibold shadow-lg hover:shadow-xl hover:from-coffee-700 hover:to-coffee-800 
+           transition-all duration-300 transform hover:scale-105 active:scale-95;
+  }
+  
+  .btn-secondary {
+    @apply bg-cream-100 text-coffee-700 px-6 py-3 rounded-xl font-semibold 
+           border-2 border-coffee-300 hover:bg-cream-200 hover:border-coffee-400
+           transition-all duration-300 transform hover:scale-105 active:scale-95;
+  }
+  
+  .option-card {
+    @apply bg-white rounded-xl p-6 shadow-md hover:shadow-xl 
+           border-2 border-transparent hover:border-coffee-400
+           transition-all duration-300 cursor-pointer transform hover:scale-105
+           active:scale-95;
+  }
+  
+  .option-card-selected {
+    @apply border-coffee-600 bg-coffee-50 ring-2 ring-coffee-500 ring-opacity-50;
+  }
+  
+  .microphone-button {
+    @apply w-24 h-24 rounded-full bg-gradient-to-br from-coffee-500 to-coffee-700
+           shadow-2xl flex items-center justify-center cursor-pointer
+           transition-all duration-300 hover:scale-110 active:scale-95;
+  }
+  
+  .microphone-listening {
+    @apply animate-pulse-slow ring-4 ring-coffee-400 ring-opacity-50;
+  }
+  
+  .progress-bar {
+    @apply h-2 bg-gradient-to-r from-coffee-400 to-coffee-600 rounded-full
+           transition-all duration-500 ease-out;
+  }
+  
+  .wave-animation {
+    @apply absolute w-full h-full rounded-full border-2 border-coffee-400
+           animate-ping opacity-75;
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.ripple-effect {
+  animation: ripple 1.5s ease-out infinite;
+}

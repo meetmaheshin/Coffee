@@ -1,0 +1,42 @@
+# Coffee Feedback API - Backend
+
+FastAPI backend for the Coffee Tester Feedback Collection system.
+
+## Setup
+
+1. Create a virtual environment:
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Run the server:
+```bash
+python main.py
+```
+
+The API will be available at `http://localhost:8000`
+
+API documentation: `http://localhost:8000/docs`
+
+## Environment Variables
+
+Create a `.env` file (optional):
+```
+DATABASE_URL=sqlite+aiosqlite:///./coffee_feedback.db
+```
+
+## API Endpoints
+
+- `POST /api/sessions/start` - Start a new feedback session
+- `POST /api/feedback/answer` - Submit an answer
+- `GET /api/questions/{question_id}` - Get a specific question
+- `POST /api/sessions/{session_id}/complete` - Complete a session
+- `GET /api/reports/{session_id}` - Get session report
+- `GET /api/sessions` - List all sessions
+- `GET /api/questions` - List all questions
