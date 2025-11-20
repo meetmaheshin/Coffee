@@ -33,8 +33,5 @@ Thumbs.db
 exports/
 *.pdf
 
-# TTS Cache (can be regenerated)
-backend/tts_cache/
-
 # Project Tools (development/debug files)
 project-tools/
