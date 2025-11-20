@@ -13,7 +13,33 @@
     <!-- Question Type: Single/Multiple Choice - Grid layout, compact -->
     <div v-if="question.type === 'single_choice' || question.type === 'multiple_choice'" 
          class="flex-1 overflow-y-auto">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-4">
+      <!-- Display option groups if available -->
+      <div v-if="question.optionGroups && question.optionGroups.length > 0">
+        <div v-for="(group, groupIndex) in question.optionGroups" :key="groupIndex" class="mb-6">
+          <h3 v-if="group.title" class="text-lg font-semibold text-coffee-700 mb-3 border-b border-coffee-200 pb-2">
+            {{ group.title }}
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <button
+              v-for="option in group.options"
+              :key="option"
+              @click="handleOptionClick(option)"
+              :disabled="isLoading"
+              class="bg-gradient-to-br from-white to-coffee-50 rounded-lg px-4 py-3 shadow-md hover:shadow-xl 
+                     border-2 border-transparent hover:border-coffee-400
+                     transition-all duration-200 cursor-pointer transform hover:scale-105
+                     active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-left
+                     flex items-center justify-between min-h-[60px]"
+              :class="{ 'border-coffee-600 bg-coffee-100 ring-2 ring-coffee-500': selectedOptions.includes(option) }"
+            >
+              <span class="text-sm md:text-base font-semibold text-coffee-800 flex-1">{{ option }}</span>
+              <span v-if="selectedOptions.includes(option)" class="text-xl ml-2">✓</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Fallback to flat options display -->
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pb-4">
         <button
           v-for="option in question.options"
           :key="option"

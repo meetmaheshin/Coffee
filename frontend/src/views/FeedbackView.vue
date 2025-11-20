@@ -16,10 +16,12 @@
       </div>
     </div>
 
-    <!-- Main Content - Side by Side Layout (No wasted space) -->
-    <div v-if="feedbackStore.currentQuestion" class="flex-1 overflow-hidden">
+    <!-- Welcome Message Before First Question -->
+
+
+  <!-- Main Content - Side by Side Layout (No wasted space) -->
+  <div v-if="feedbackStore.currentQuestion" class="flex-1 overflow-hidden">
       <div class="max-w-screen-2xl mx-auto h-full flex gap-4 p-4">
-        
         <!-- LEFT: Options Panel (65% width) -->
         <div class="flex-[0_0_65%] bg-white rounded-2xl shadow-xl overflow-y-auto">
           <QuestionPanel
@@ -29,7 +31,6 @@
             @text-input="handleTextInput"
           />
         </div>
-
         <!-- RIGHT: Chat/Voice Panel (35% width) -->
         <div class="flex-[0_0_35%] flex flex-col">
           <VoicePanel
@@ -38,7 +39,6 @@
             @voice-answer="handleVoiceAnswer"
           />
         </div>
-
       </div>
     </div>
 
@@ -72,6 +72,8 @@ import { useFeedbackStore } from '@/stores/feedback'
 import QuestionPanel from '@/components/QuestionPanel.vue'
 import VoicePanel from '@/components/VoicePanel.vue'
 
+import { useElevenLabsTTS } from '@/composables/useElevenLabsTTS'
+
 const props = defineProps({
   sessionId: {
     type: String,
@@ -82,10 +84,23 @@ const props = defineProps({
 const router = useRouter()
 const feedbackStore = useFeedbackStore()
 
-onMounted(() => {
+const { speak: speakTTS } = useElevenLabsTTS()
+
+
+onMounted(async () => {
   // If no current session, redirect to home
   if (!feedbackStore.session || feedbackStore.session.id !== parseInt(props.sessionId)) {
     router.push({ name: 'home' })
+    return
+  }
+  // Play welcome message via TTS, then first question
+  await speakTTS('Welcome to ABC Coffee Testing. You can speak with a representative or select an option from the left side.')
+  // Speak the first question if available
+  if (feedbackStore.currentQuestion && feedbackStore.currentQuestion.text) {
+    await speakTTS(feedbackStore.currentQuestion.text)
+    // Start the mic after first question is spoken
+    // Use event bus or direct ref to VoicePanel if needed, but here we use window event
+    window.dispatchEvent(new CustomEvent('start-mic'))
   }
 })
 

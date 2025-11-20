@@ -223,7 +223,8 @@
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { useSpeechRecognition, useTextToSpeech } from '@/composables/useSpeech'
+import { useElevenLabsTTS } from '@/composables/useElevenLabsTTS'
+import { useSpeechRecognition } from '@/composables/useSpeech'
 
 const props = defineProps({
   question: {
@@ -255,7 +256,7 @@ const {
   forceRestart
 } = useSpeechRecognition()
 
-const { isSpeaking, speak, cancel } = useTextToSpeech()
+const { isSpeaking, speak, cancel, error: ttsError } = useElevenLabsTTS()
 
 // Format timestamp for chat messages
 const formatTime = (timestamp) => {
@@ -282,17 +283,27 @@ setTimeout(() => {
 }, 5000)
 
 // Watch for question changes - add to chat history and speak
-watch(() => props.question, (newQuestion, oldQuestion) => {
+let isFirstLoad = true
+let preloadAudio = null
+// Helper to preload TTS audio for a given text
+const preloadTTS = async (text, voice_id = null) => {
+  try {
+    // Use the same API as speak, but don't play, just fetch and cache
+    await api.post('/api/tts', { text, voice_id: voice_id || 'EIsgvJT3rwoPvRFG6c4n' }, { responseType: 'blob' })
+  } catch (e) {
+    // Ignore errors for preloading
+  }
+}
+
+watch(() => props.question, async (newQuestion, oldQuestion) => {
   if (newQuestion && newQuestion.text) {
     console.log('Question changed:', oldQuestion?.id, '->', newQuestion.id)
     cancel()
-    
     // Clear any pending auto-submit
     if (autoSubmitTimer.value) {
       clearTimeout(autoSubmitTimer.value)
       autoSubmitTimer.value = null
     }
-    
     // Add question to chat history
     if (oldQuestion && oldQuestion.id !== newQuestion.id) {
       chatHistory.value.push({
@@ -310,22 +321,22 @@ watch(() => props.question, (newQuestion, oldQuestion) => {
       })
       scrollToBottom()
     }
-    
     // Only auto-speak and restart for question changes (not initial load)
     const isQuestionChange = oldQuestion && oldQuestion.id !== newQuestion.id
-    
-    // Auto-speak the question after a short delay
-    setTimeout(() => {
-      speak(newQuestion.text)
-      
-      // Force restart mic for new questions to ensure it's working
-      setTimeout(() => {
+    if (isQuestionChange) {
+      setTimeout(async () => {
+        await speak(newQuestion.text)
+        // Always restart mic after TTS
         if (isSpeechSupported.value) {
-          console.log('Force restarting mic for new question...')
-          forceRestart()  // Use force restart for better reliability
+          start()
         }
-      }, 2000)
-    }, isQuestionChange ? 800 : 0)  // No delay on first load
+        // Preload next question's TTS if available
+        if (props.nextQuestion && props.nextQuestion.text) {
+          preloadTTS(props.nextQuestion.text)
+        }
+      }, 800)
+    }
+    isFirstLoad = false
   }
 }, { immediate: true })
 
@@ -367,8 +378,15 @@ const handleKeyDown = (e) => {
   }
 }
 
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  // Listen for start-mic event from parent
+  window.addEventListener('start-mic', () => {
+    if (!isListening.value && isSpeechSupported.value) {
+      start()
+    }
+  })
 })
 
 onUnmounted(() => {

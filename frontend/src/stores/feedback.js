@@ -5,6 +5,24 @@ import api from '../services/api'
 export const useFeedbackStore = defineStore('feedback', () => {
   const session = ref(null)
   const currentQuestion = ref(null)
+  const mergedFlavorQuestions = ref(null) // Holds both primary and specific questions
+  // Fetch both primary and specific flavor questions for side-by-side display
+  async function fetchMergedFlavorQuestions(primaryFlavor = 'Fruity') {
+    isLoading.value = true
+    error.value = null
+    try {
+      const response = await api.get(`/api/questions/primary-with-specific`, {
+        params: { primary_flavor: primaryFlavor }
+      })
+      mergedFlavorQuestions.value = response.data
+      return mergedFlavorQuestions.value
+    } catch (err) {
+      error.value = err.message
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
   const answers = ref([])
   const isLoading = ref(false)
   const error = ref(null)
@@ -134,6 +152,7 @@ export const useFeedbackStore = defineStore('feedback', () => {
   return {
     session,
     currentQuestion,
+    mergedFlavorQuestions,
     answers,
     isLoading,
     error,
@@ -143,6 +162,7 @@ export const useFeedbackStore = defineStore('feedback', () => {
     completeSession,
     getReport,
     exportToCSV,
+    fetchMergedFlavorQuestions,
     resetSession
   }
 })

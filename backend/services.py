@@ -135,7 +135,8 @@ Return ONLY the exact option name from the list above, nothing else."""
 
 async def load_questions_from_csv():
     """Load questions from CSV file and populate database"""
-    from database import async_session_maker
+    from database import get_async_engine_and_session
+    _, async_session_maker = get_async_engine_and_session()
     
     csv_path = os.path.join(os.path.dirname(__file__), "..", "Flavor.csv")
     
@@ -208,7 +209,19 @@ async def load_questions_from_csv():
         if not existing:
             print(f"DEBUG: Loading {len(questions_data)} questions into database...")
             for q_data in questions_data:
-                question = Question(**q_data)
+                # Convert flat options to option_groups format
+                option_groups = []
+                if q_data.get('options'):
+                    option_groups = [{"title": "", "options": q_data['options']}]
+                
+                question = Question(
+                    id=q_data['id'],
+                    text=q_data['text'],
+                    type=q_data['type'],
+                    option_groups=option_groups,
+                    category=q_data.get('category'),
+                    order_index=q_data.get('order_index', 0)
+                )
                 session.add(question)
             
             await session.commit()
@@ -226,71 +239,128 @@ async def get_next_question(
     Get the next question based on the current question and answer
     """
     if current_question_id is None:
-        # Start directly with primary flavor question (no welcome)
-        result = await db.execute(select(Question).where(Question.id == "flavor_main"))
-        question = result.scalar_one_or_none()
+        # Check if there are admin questions - if so, use them instead of CSV questions
+        admin_questions = await db.execute(
+            select(Question)
+            .where(Question.id.not_in(list(QUESTION_FLOW.keys())))
+            .where(Question.id != "flavor_main")
+            .order_by(Question.order_index)
+        )
+        admin_question = admin_questions.first()
+
+        if admin_question:
+            # Use admin questions instead of CSV questions
+            print(f"DEBUG: Found admin questions, using them instead of CSV flow")
+            question = admin_question[0]
+        else:
+            # No admin questions, use the default CSV flow
+            result = await db.execute(select(Question).where(Question.id == "flavor_main"))
+            question = result.scalar_one_or_none()
     else:
-        # Determine next question based on flow logic
-        flow = QUESTION_FLOW.get(current_question_id, {})
-        
-        # Check if there's a conditional next based on answer
-        if "next_map" in flow and current_answer:
-            # Try exact match first
-            next_id = flow["next_map"].get(current_answer)
-            
-            # If no exact match, try simple fuzzy matching (singular/plural, case-insensitive)
-            if not next_id:
-                answer_lower = current_answer.lower().strip()
-                for key, value in flow["next_map"].items():
-                    key_lower = key.lower().strip()
-                    # Check if answer matches key (with or without 's', 'ies', etc.)
-                    if (answer_lower == key_lower or 
-                        answer_lower == key_lower.rstrip('s') or
-                        answer_lower + 's' == key_lower or
-                        answer_lower + 'es' == key_lower):
-                        next_id = value
-                        print(f"DEBUG: Fuzzy matched '{current_answer}' to '{key}' -> {next_id}")
-                        break
-            
-            # If still no match, use AI to intelligently match
-            if not next_id and os.getenv("OPENAI_API_KEY"):
-                print(f"DEBUG: No fuzzy match, trying AI matching...")
-                available_options = list(flow["next_map"].keys())
-                matched_option = await match_answer_with_ai(current_answer, available_options)
-                
-                if matched_option:
-                    next_id = flow["next_map"].get(matched_option)
-                    print(f"DEBUG: AI matched '{current_answer}' to '{matched_option}' -> {next_id}")
+        # Check if current question is an admin question
+        is_admin_question = current_question_id not in QUESTION_FLOW
+
+        if is_admin_question:
+            # Handle admin question flow
+            print(f"DEBUG: {current_question_id} is an admin question, finding next in sequence")
+            admin_questions = await db.execute(
+                select(Question)
+                .where(Question.id.not_in(list(QUESTION_FLOW.keys())))
+                .where(Question.id != "flavor_main")
+                .order_by(Question.order_index)
+            )
+            admin_qs = admin_questions.scalars().all()
+
+            # Find current question index and get next one
+            current_idx = next((i for i, q in enumerate(admin_qs) if q.id == current_question_id), -1)
+            if current_idx >= 0 and current_idx + 1 < len(admin_qs):
+                next_id = admin_qs[current_idx + 1].id
+                print(f"DEBUG: Next admin question: {next_id}")
+                result = await db.execute(select(Question).where(Question.id == next_id))
+                question = result.scalar_one_or_none()
+            else:
+                print(f"DEBUG: No more admin questions after {current_question_id}")
+                return None  # End of questionnaire
+        else:
+            # Handle CSV question flow
+            flow = QUESTION_FLOW.get(current_question_id, {})
+
+            # Check if there's a conditional next based on answer
+            if "next_map" in flow and current_answer:
+                # Try exact match first
+                next_id = flow["next_map"].get(current_answer)
+
+                # If no exact match, try simple fuzzy matching (singular/plural, case-insensitive)
+                if not next_id:
+                    answer_lower = current_answer.lower().strip()
+                    for key, value in flow["next_map"].items():
+                        key_lower = key.lower().strip()
+                        # Check if answer matches key (with or without 's', 'ies', etc.)
+                        if (answer_lower == key_lower or
+                            answer_lower == key_lower.rstrip('s') or
+                            answer_lower + 's' == key_lower or
+                            answer_lower + 'es' == key_lower):
+                            next_id = value
+                            print(f"DEBUG: Fuzzy matched '{current_answer}' to '{key}' -> {next_id}")
+                            break
+
+                # If still no match, use AI to intelligently match
+                if not next_id and os.getenv("OPENAI_API_KEY"):
+                    print(f"DEBUG: No fuzzy match, trying AI matching...")
+                    available_options = list(flow["next_map"].keys())
+                    matched_option = await match_answer_with_ai(current_answer, available_options)
+
+                    if matched_option:
+                        next_id = flow["next_map"].get(matched_option)
+                        print(f"DEBUG: AI matched '{current_answer}' to '{matched_option}' -> {next_id}")
+                    else:
+                        print(f"DEBUG: AI could not match '{current_answer}' to any option")
+
+                print(f"DEBUG: current_question={current_question_id}, answer={current_answer}, next_id={next_id}")
+            else:
+                next_id = flow.get("next")
+                print(f"DEBUG: current_question={current_question_id}, no answer mapping, next_id={next_id}")
+
+            if next_id is None:
+                print(f"DEBUG: No next question found for {current_question_id}")
+                # Check if there are admin questions to show after CSV flow
+                admin_questions = await db.execute(
+                    select(Question)
+                    .where(Question.id.not_in(list(QUESTION_FLOW.keys())))
+                    .where(Question.id != "flavor_main")
+                    .order_by(Question.order_index)
+                )
+                admin_question = admin_questions.first()
+                if admin_question:
+                    next_id = admin_question[0].id
+                    print(f"DEBUG: Found admin question to show after CSV flow: {next_id}")
                 else:
-                    print(f"DEBUG: AI could not match '{current_answer}' to any option")
-            
-            print(f"DEBUG: current_question={current_question_id}, answer={current_answer}, next_id={next_id}")
-        else:
-            next_id = flow.get("next")
-            print(f"DEBUG: current_question={current_question_id}, no answer mapping, next_id={next_id}")
-        
-        if next_id is None:
-            print(f"DEBUG: No next question found for {current_question_id}")
-            return None  # End of questionnaire
-        
-        result = await db.execute(select(Question).where(Question.id == next_id))
-        question = result.scalar_one_or_none()
-        
-        if not question:
-            print(f"DEBUG: Question {next_id} not found in database!")
-        else:
-            print(f"DEBUG: Found question: {question.id} - {question.text}")
-    
+                    return None  # End of questionnaire
+
+            result = await db.execute(select(Question).where(Question.id == next_id))
+            question = result.scalar_one_or_none()
+
+            if not question:
+                print(f"DEBUG: Question {next_id} not found in database!")
+            else:
+                print(f"DEBUG: Found question: {question.id} - {question.text}")
+
     if question:
+        # Extract options from all option groups
+        all_options = []
+        for group in (question.option_groups or []):
+            all_options.extend(group.get('options', []))
+
         return QuestionResponse(
             id=question.id,
             text=question.text,
             type=question.type,
-            options=question.options,
+            options=all_options,  # Keep flattened options for backward compatibility
+            optionGroups=question.option_groups,  # Add structured groups
             category=question.category,
             order_index=question.order_index
         )
-    
+
     return None
 
 

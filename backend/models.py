@@ -31,6 +31,7 @@ class Answer(Base):
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=False)
     question_id = Column(String(100), nullable=False)
     answer_text = Column(Text, nullable=False)
+    matched_answer = Column(String(100), nullable=True)  # Store matched/corrected value
     answer_type = Column(String(20), default="voice")  # voice, click, text
     confidence_score = Column(Float, nullable=True)
     timestamp = Column(DateTime, nullable=False)
@@ -46,7 +47,7 @@ class Question(Base):
     id = Column(String(100), primary_key=True, index=True)
     text = Column(Text, nullable=False)
     type = Column(String(50), nullable=False)  # intro, single_choice, multiple_choice, rating, open
-    options = Column(JSON, nullable=True)  # JSON array of options
+    option_groups = Column(JSON, nullable=True)  # JSON array of {title, options}
     category = Column(String(100), nullable=True)
     order_index = Column(Integer, default=0)
     parent_answer = Column(String(100), nullable=True)  # For conditional questions
